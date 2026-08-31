@@ -1,0 +1,12 @@
+node_modules/
+.data/
+*.log
+
+# Captured real SRM pages used as local parser fixtures — contain personal data
+# (name, registration number, phone). Kept local only, never committed.
+fixtures/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

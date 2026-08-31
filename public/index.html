@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Campussy — SRM dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<div id="app">
+  <!-- LOGIN -->
+  <section id="login" class="screen">
+    <div class="login-wrap">
+      <div class="brand"><span class="logo">🎓</span><h1>Campussy</h1></div>
+      <p class="tag">Your SRM IST, in one calm place.</p>
+
+      <div class="card login-card">
+        <h2>Sign in</h2>
+        <p class="muted">Two SRM logins — both for SRMIST Chennai.</p>
+
+        <div class="acc">
+          <div class="acc-head"><span class="pill pill-blue">✳</span> Academia (Zoho)</div>
+          <input id="acaEmail" type="email" placeholder="netid@srmist.edu.in" autocomplete="username" />
+          <input id="acaPass" type="password" placeholder="Academia password" autocomplete="current-password" />
+        </div>
+
+        <button id="loginBtn" class="btn primary">Sign in</button>
+        <div id="loginErr" class="err"></div>
+        <p class="muted small" style="margin:14px 0 0">Marks &amp; attendance (from the SRM Student Portal) are optional and can be added later from inside — Campussy works on Academia alone.</p>
+      </div>
+      <p class="fine">Your password is sent only to SRM's own servers to establish your session. Campussy stores no passwords.</p>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dash" class="screen hidden">
+    <header class="topbar">
+      <div class="brand small"><span class="logo">🎓</span><b>Campussy</b></div>
+      <div class="who">
+        <div id="whoName" class="who-name"></div>
+        <div id="whoMeta" class="who-meta"></div>
+      </div>
+      <div class="top-actions">
+        <span id="sessionChip" class="chip" title="Session auto-resets every 6 hours"></span>
+        <button id="refreshBtn" class="btn ghost" title="Force refresh from SRM">↻</button>
+        <button id="logoutBtn" class="btn ghost">Logout</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="today">Today</button>
+      <button class="tab" data-tab="week">Week</button>
+      <button class="tab" data-tab="courses">Courses</button>
+      <button class="tab" data-tab="calendar">Calendar</button>
+      <!-- Student-Portal tabs are injected here only after the user opts in -->
+      <button class="tab tab-sp hidden" data-tab="attendance">Attendance</button>
+      <button class="tab tab-sp hidden" data-tab="marks">Marks</button>
+      <button id="spToggle" class="tab tab-add" data-tab="sp">＋ Marks &amp; Attendance</button>
+    </nav>
+
+    <main id="views">
+      <div class="view" data-view="today"></div>
+      <div class="view hidden" data-view="week"></div>
+      <div class="view hidden" data-view="courses"></div>
+      <div class="view hidden" data-view="calendar"></div>
+      <div class="view hidden" data-view="attendance"></div>
+      <div class="view hidden" data-view="marks"></div>
+      <div class="view hidden" data-view="sp"></div>
+    </main>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

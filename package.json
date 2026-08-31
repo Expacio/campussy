@@ -1,0 +1,17 @@
+{
+  "name": "campussy",
+  "version": "1.0.0",
+  "description": "A beautiful unified dashboard for SRM IST Chennai — timetable, day-orders, attendance and internal marks.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/parsers.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cookie-parser": "^1.4.6"
+  },
+  "engines": { "node": ">=18" }
+}
