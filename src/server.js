@@ -167,5 +167,10 @@ app.post('/api/sp/refresh', auth, async (req, res) => {
 app.get('/api/sp/attendance', auth, (req, res) => res.json(svc.getSp(req.userKey, 'attendance') || { courses: [] }));
 app.get('/api/sp/marks', auth, (req, res) => res.json(svc.getSp(req.userKey, 'marks') || { courses: [] }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`\n  🎓  Campussy running →  http://localhost:${PORT}\n`));
+// Run a real server for local dev / persistent hosts; on Vercel the app is
+// imported as a serverless handler (see api/index.js) so we don't call listen().
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`\n  🎓  Campussy running →  http://localhost:${PORT}\n`));
+}
+module.exports = app;

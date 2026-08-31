@@ -6,9 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DATA_DIR = path.join(__dirname, '..', '.data');
+// On serverless (Vercel) the project dir is read-only; only /tmp is writable
+// (and ephemeral — fine for a cache, it just re-fetches after a cold start).
+const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'campussy') : path.join(__dirname, '..', '.data');
 const CACHE_FILE = path.join(DATA_DIR, 'cache.json');
-fs.mkdirSync(DATA_DIR, { recursive: true });
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch { /* read-only FS; cache becomes in-memory only */ }
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 
