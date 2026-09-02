@@ -99,20 +99,21 @@ async function completeLogin(challenge, username, password, captcha) {
   if (p.status === 302 && /HRDSystem/i.test(p.headers.location || '')) {
     return { cookie: mergeCookie(cookie, setCookies(p.headers)), createdAt: now, username };
   }
-  const alert = (p.body.match(/alert-heading[\s\S]{0,120}/i) || [''])[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  if (/invalid captcha/i.test(alert)) throw Object.assign(new Error('Incorrect captcha — try again.'), { retryCaptcha: true });
-  if (/invalid|incorrect|credential|password/i.test(alert)) throw new Error('Wrong NetID or password.');
-  throw new Error(alert || 'Student Portal login failed.');
-}
-
-// Alternate LoginServlet path used on some deployments.
-async function completeLoginResilient(challenge, u, pw, cap) {
-  try { return await completeLogin(challenge, u, pw, cap); }
-  catch (e) {
-    if (e.retryCaptcha || /Wrong NetID/.test(e.message)) throw e;
-    // retry against the /LoginServlet root path
-    const form = e; throw form;
+  // Surface the portal's own wording rather than a lossy paraphrase — it carries
+  // details we must not swallow, e.g. "You have 1 out of 3 login attempts remaining."
+  // (SRM locks the account after 3), password-expiry and already-locked notices.
+  const alert = (p.body.match(/alert-heading[\s\S]{0,240}/i) || [''])[0]
+    .replace(/^[^>]*>/, '')           // drop the tail of the opening tag
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^Alert[\s:!.-]*/i, '')  // drop the generic "Alert" heading
+    .replace(/\.(?=[A-Z])/g, '. ')    // portal omits the space in "invalid.The login"
+    .trim();
+  if (/captcha/i.test(alert)) {
+    throw Object.assign(new Error(alert || 'Incorrect captcha — try again.'), { retryCaptcha: true });
   }
+  throw new Error(alert || 'Student Portal login failed.');
 }
 
 // Fetch a report fragment (attendance / internal marks) with an authed cookie.
@@ -133,4 +134,4 @@ async function fetchReport(cookie, iden, jspName) {
 const fetchAttendance = (cookie) => fetchReport(cookie, 9, 'studentAttendanceDetails.jsp');
 const fetchMarks = (cookie) => fetchReport(cookie, 13, 'studentInternalMarkDetails.jsp');
 
-module.exports = { beginLogin, completeLogin, completeLoginResilient, fetchAttendance, fetchMarks };
+module.exports = { beginLogin, completeLogin, fetchAttendance, fetchMarks };
