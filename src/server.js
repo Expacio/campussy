@@ -6,6 +6,8 @@ const path = require('path');
 const academia = require('./academia');
 const store = require('./store');
 const svc = require('./service');
+const { seal, unseal } = require('./seal');
+const { Jar } = academia;
 
 const app = express();
 app.use(express.json({ limit: '4mb' }));       // bookmarklet posts full HTML
@@ -15,13 +17,36 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const userKeyOf = (s) => 'u_' + crypto.createHash('sha256')
   .update((s.user && s.user.registrationNumber) || s.academia.email).digest('hex').slice(0, 16);
 
+// Cookies must be https-only on Vercel; on http://localhost `secure` would stop
+// the browser from ever sending them back, so only set it when deployed.
+const cookieOpts = (maxAge) => ({ httpOnly: true, sameSite: 'lax', secure: !!process.env.VERCEL, maxAge });
+
+// Persist the durable parts of a session into the signed `csid` cookie. Only the
+// SRM/Zoho session cookies travel — never a password.
+function writeSession(res, session) {
+  res.cookie('csid', seal({
+    v: 1,
+    createdAt: session.createdAt,
+    email: session.academia.email,
+    cookies: session.academia.jar.toObject(),
+    user: session.user,
+    sp: session.sp ? { cookie: session.sp.cookie, username: session.sp.username, createdAt: session.sp.createdAt } : undefined,
+  }), cookieOpts(store.SIX_HOURS));
+}
+
 function auth(req, res, next) {
-  const sid = req.cookies.csid;
-  const session = sid && store.getSession(sid);
-  if (!session) return res.status(401).json({ error: 'session_expired', message: 'Session expired — please log in again.' });
-  req.session = session;
-  req.sid = sid;
-  req.userKey = userKeyOf(session);
+  const p = unseal(req.cookies.csid);
+  if (!p || !p.createdAt || Date.now() - p.createdAt > store.SIX_HOURS) {
+    return res.status(401).json({ error: 'session_expired', message: 'Session expired — please log in again.' });
+  }
+  req.session = {
+    createdAt: p.createdAt,
+    academia: { jar: Jar.from(p.cookies), email: p.email, createdAt: p.createdAt },
+    user: p.user || {},
+    sp: p.sp,
+  };
+  req.userKey = userKeyOf(req.session);
+  req.saveSession = () => writeSession(res, req.session);
   next();
 }
 
@@ -33,19 +58,17 @@ app.post('/api/login', async (req, res) => {
   }
   try {
     const session = await academia.login(academiaEmail.trim(), academiaPassword);
-    const sid = store.newSid();
     // Fetch timetable once to learn identity + batch, prime the cache.
-    const tmpKey = 'u_' + crypto.createHash('sha256').update(academiaEmail.trim()).digest('hex').slice(0, 16);
     let tt;
     try {
       const { parseTimetable } = require('./parsers/timetable');
       tt = parseTimetable(await academia.fetchPage(session.jar, 'My_Time_Table_2023_24'));
     } catch { tt = { student: {}, courses: [] }; }
     const user = tt.student || {};
-    store.putSession(sid, { academia: session, user });
-    const uk = userKeyOf({ academia: session, user });
+    const full = { academia: session, user, createdAt: Date.now() };
+    const uk = userKeyOf(full);
     store.setCache(uk, 'timetable', tt);
-    res.cookie('csid', sid, { httpOnly: true, sameSite: 'lax', maxAge: store.SIX_HOURS });
+    writeSession(res, full);
     res.json({ ok: true, student: user, hasSp: !!svc.getSp(uk, 'attendance') });
   } catch (err) {
     // Academia error messages arrive HTML-encoded (and sometimes with markup).
@@ -57,8 +80,8 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  if (req.cookies.csid) store.dropSession(req.cookies.csid);
   res.clearCookie('csid');
+  res.clearCookie('spch');
   res.json({ ok: true });
 });
 
@@ -121,11 +144,13 @@ app.get('/api/dashboard', auth, async (req, res) => {
 // --- SP portal: automated login (captcha solved by the user) ---
 const sp = require('./sp');
 
-// 1) open a portal session and return the captcha image to display
+// 1) open a portal session and return the captcha image to display. The challenge
+// (opaque SRM state, no secrets) rides back in a short-lived signed cookie so the
+// begin→login handoff survives serverless — the user may take a while on the captcha.
 app.post('/api/sp/begin', auth, async (req, res) => {
   try {
     const { challenge, captchaDataUri } = await sp.beginLogin();
-    req.session.spChallenge = challenge; // held in-memory on the Campussy session
+    res.cookie('spch', seal(challenge), cookieOpts(15 * 60 * 1000));
     res.json({ ok: true, captcha: captchaDataUri });
   } catch (e) {
     res.status(502).json({ error: 'sp_begin_failed', message: e.message });
@@ -138,13 +163,15 @@ app.post('/api/sp/login', auth, async (req, res) => {
   if (!netid || !password || !captcha) {
     return res.status(400).json({ error: 'missing', message: 'NetID, password and captcha are required.' });
   }
-  if (!req.session.spChallenge) {
+  const challenge = unseal(req.cookies.spch);
+  if (!challenge) {
     return res.status(400).json({ error: 'no_challenge', message: 'Captcha session expired — reload the captcha.' });
   }
   try {
-    const spSession = await sp.completeLogin(req.session.spChallenge, netid.trim(), password, captcha.trim());
-    req.session.sp = spSession;               // authed portal cookie, in-memory only
-    delete req.session.spChallenge;
+    const spSession = await sp.completeLogin(challenge, netid.trim(), password, captcha.trim());
+    req.session.sp = spSession;
+    writeSession(res, req.session);      // persist the authed portal cookie into csid
+    res.clearCookie('spch');             // single-use challenge
     const { attendance, marks } = await svc.refreshSp(req.userKey, spSession.cookie);
     res.json({ ok: true, attendance: attendance.courses.length, marks: marks.courses.length });
   } catch (e) {
@@ -159,7 +186,7 @@ app.post('/api/sp/refresh', auth, async (req, res) => {
     const { attendance, marks } = await svc.refreshSp(req.userKey, req.session.sp.cookie);
     res.json({ ok: true, attendance: attendance.courses.length, marks: marks.courses.length });
   } catch (e) {
-    if (e.sessionExpired) { delete req.session.sp; return res.status(401).json({ error: 'sp_expired', message: 'Portal session expired — reconnect.' }); }
+    if (e.sessionExpired) { delete req.session.sp; writeSession(res, req.session); return res.status(401).json({ error: 'sp_expired', message: 'Portal session expired — reconnect.' }); }
     res.status(502).json({ error: 'sp_refresh_failed', message: e.message });
   }
 });

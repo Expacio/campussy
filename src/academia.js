@@ -22,6 +22,14 @@ class Jar {
   }
   header() { return [...this.c.entries()].map(([k, v]) => `${k}=${v}`).join('; '); }
   get(k) { return this.c.get(k); }
+  // Serialisation so a session can ride in a signed cookie across serverless
+  // invocations (see src/seal.js) and be rebuilt on the next request.
+  toObject() { return Object.fromEntries(this.c); }
+  static from(cookies) {
+    const j = new Jar();
+    if (cookies) for (const [k, v] of Object.entries(cookies)) j.c.set(k, v);
+    return j;
+  }
 }
 
 function request(method, urlStr, { jar, headers = {}, body } = {}) {
@@ -123,4 +131,4 @@ async function fetchPage(jar, pageName) {
   return res.body;
 }
 
-module.exports = { login, fetchPage };
+module.exports = { login, fetchPage, Jar };

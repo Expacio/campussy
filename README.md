@@ -32,6 +32,7 @@ Nothing is stored but a short-lived session. **No passwords are persisted.**
 | Timetable | personal course→slot list × unified `(day-order, hour)→slot` grid × planner `date→day-order`, cross-linked in `src/service.js`. |
 | Student Portal | `src/sp.js` opens a session, serves you the captcha, submits credentials, then fetches the marks/attendance report fragments. |
 | Rate limits | SRM throttles hard, so responses are cached on disk (`src/store.js`) with stale-fallback; sessions reset every 6h. |
+| Sessions | Carried in a signed (HMAC-SHA256) cookie, not server memory, so they survive Vercel's stateless serverless instances — including the gap while you read the Student-Portal captcha (`src/seal.js`). Only short-lived SRM/Zoho session cookies travel; never a password. Set `SESSION_SECRET` in the deployment env. |
 
 ## Run
 
@@ -61,7 +62,8 @@ src/
   academia.js        Zoho academia login + page fetch
   sp.js              Student Portal login (captcha) + report fetch
   service.js         caching + cross-linking (day-order → classes)
-  store.js           disk cache + in-memory sessions (6h reset)
+  store.js           disk cache (6h reset)
+  seal.js            signed-cookie session sealing (serverless-safe)
   parsers/           decode.js, timetable.js, unified.js, planner.js, sp.js
 public/              index.html, styles.css, app.js  (vanilla, no build step)
 test/parsers.test.js

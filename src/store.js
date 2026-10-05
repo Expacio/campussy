@@ -4,7 +4,6 @@
 //   • cache aggressively so we rarely hit SRM (they rate-limit hard)
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
 // On serverless (Vercel) the project dir is read-only; only /tmp is writable
 // (and ephemeral — fine for a cache, it just re-fetches after a cold start).
@@ -34,21 +33,11 @@ function persist() {
   }, 250);
 }
 
-// In-memory academia sessions keyed by an opaque session id (never persisted).
-const sessions = new Map(); // sid -> { academia, user, createdAt }
-
-function newSid() { return crypto.randomBytes(24).toString('hex'); }
-
-function putSession(sid, data) {
-  sessions.set(sid, { ...data, createdAt: Date.now() });
-}
-function getSession(sid) {
-  const s = sessions.get(sid);
-  if (!s) return null;
-  if (Date.now() - s.createdAt > SIX_HOURS) { sessions.delete(sid); return null; } // 6h reset
-  return s;
-}
-function dropSession(sid) { sessions.delete(sid); }
+// Sessions are no longer held in process memory: on serverless that memory is not
+// shared between invocations, so the session would vanish between two requests (and
+// the Student-Portal captcha flow would never complete). They now ride in a signed
+// cookie instead — see src/seal.js and the auth middleware in src/server.js. The
+// disk cache below stays a best-effort data cache (re-fetched after a cold start).
 
 // Cache is namespaced per user (registration number or email hash) so users never
 // see each other's data.
@@ -71,6 +60,6 @@ function clearUser(userKey) {
 }
 
 module.exports = {
-  SIX_HOURS, TTL, newSid, putSession, getSession, dropSession,
+  SIX_HOURS, TTL,
   getCache, setCache, clearUser,
 };
