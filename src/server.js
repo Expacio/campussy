@@ -199,22 +199,6 @@ app.post('/api/sp/refresh', auth, async (req, res) => {
 app.get('/api/sp/attendance', auth, (req, res) => res.json(svc.getSp(req.userKey, 'attendance') || { courses: [] }));
 app.get('/api/sp/marks', auth, (req, res) => res.json(svc.getSp(req.userKey, 'marks') || { courses: [] }));
 
-// TEMP diagnostic (to be removed): egress IP + geo, three sequential fetches to
-// check within-request IP stability.
-app.get('/api/_ipcheck', async (req, res) => {
-  try {
-    const ips = [];
-    for (let i = 0; i < 3; i++) {
-      const r = await fetch('https://api.ipify.org?format=json');
-      ips.push((await r.json()).ip);
-    }
-    let geo = {};
-    try { geo = await (await fetch(`https://ipinfo.io/${ips[0]}/json`)).json(); } catch {}
-    res.json({ ips, region: process.env.VERCEL_REGION || process.env.RENDER_REGION || null,
-      geo: { city: geo.city, region: geo.region, country: geo.country, org: geo.org } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // Run a real server for local dev / persistent hosts; on Vercel the app is
 // imported as a serverless handler (see api/index.js) so we don't call listen().
 if (require.main === module) {
