@@ -10,6 +10,9 @@ const { seal, unseal } = require('./seal');
 const { Jar } = academia;
 
 const app = express();
+// Behind Vercel/Render's TLS-terminating proxy so req.protocol reflects https
+// and Secure cookies are emitted correctly.
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '4mb' }));       // bookmarklet posts full HTML
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -17,9 +20,11 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const userKeyOf = (s) => 'u_' + crypto.createHash('sha256')
   .update((s.user && s.user.registrationNumber) || s.academia.email).digest('hex').slice(0, 16);
 
-// Cookies must be https-only on Vercel; on http://localhost `secure` would stop
-// the browser from ever sending them back, so only set it when deployed.
-const cookieOpts = (maxAge) => ({ httpOnly: true, sameSite: 'lax', secure: !!process.env.VERCEL, maxAge });
+// Cookies must be Secure in production (served over https); on http://localhost
+// `secure` would stop the browser from ever sending them back, so only set it when
+// deployed (Vercel and Render both set a telltale env var).
+const IS_PROD = !!(process.env.VERCEL || process.env.RENDER);
+const cookieOpts = (maxAge) => ({ httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge });
 
 // Persist the durable parts of a session into the signed `csid` cookie. Only the
 // SRM/Zoho session cookies travel — never a password.

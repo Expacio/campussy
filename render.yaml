@@ -1,0 +1,23 @@
+# Render Blueprint — deploy campussy as a persistent single-instance web service.
+#
+# Why not Vercel: the SRM Student-Portal login is a two-step human-captcha flow
+# (fetch captcha, then submit), and SRM binds that session to the originating IP.
+# Vercel's serverless functions egress from a different IP on nearly every
+# invocation, so the submit looks like a hijacked session and is rejected. A single
+# always-on Render instance handles both requests from one stable egress IP, so the
+# login works. See README "Sessions" / "Hosting".
+services:
+  - type: web
+    name: campussy
+    runtime: node
+    plan: free            # single instance => one stable outbound IP
+    region: singapore     # closest Render region to SRM (Chennai) for latency
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true       # redeploy on push to the connected branch
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true   # Render generates once and keeps it stable
+      - key: NODE_VERSION
+        value: "20"

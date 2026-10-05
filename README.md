@@ -44,6 +44,27 @@ npm start           # http://localhost:3000
 Sign in with your Academia (Zoho) email + password. Optionally connect the Student
 Portal from the **Marks & Attendance** tab.
 
+## Deploying
+
+**Host it on a persistent single-instance server — not serverless.** The Student-Portal
+login is a two-step human-captcha flow (fetch the captcha, then submit), and SRM binds
+that session to the **originating IP**. Serverless platforms (e.g. Vercel) egress from a
+different IP on nearly every invocation, so the submit arrives from a different IP than
+the captcha was issued to and SRM rejects it as a hijacked session — you get a spurious
+*"Invalid credentials"*. (Academia login is unaffected because its whole handshake
+happens inside one request, hence one IP.)
+
+A single always-on instance handles both requests from one stable egress IP, so the
+login works. The repo ships a **Render** blueprint (`render.yaml`, free tier,
+single instance):
+
+1. Push to GitHub, then on Render: **New → Blueprint** and pick this repo.
+2. Render reads `render.yaml`, provisions the service, and auto-generates
+   `SESSION_SECRET`. Done.
+
+`npm start` already honours `$PORT`, so any persistent Node host (Render, Fly.io,
+Railway, a plain VPS behind a reverse proxy) works the same way.
+
 ## Tests
 
 ```bash
